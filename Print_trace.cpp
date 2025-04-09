@@ -28,10 +28,14 @@ struct Print_trace : PassInfoMixin<Print_trace> {
         printFunc = Function::Create(FT, Function::ExternalLinkage, "__print_func_name", M);
       }
   
-      // Insert instrumentation at the beginning of the function (the entry block).
-      BasicBlock &Entry = F.getEntryBlock();
-      IRBuilder<> Builder(&*Entry.getFirstInsertionPt());
-  
+    // Insert before first non-PHI instruction
+    BasicBlock &Entry = F.getEntryBlock();
+    Instruction *FirstInst = &Entry.front();
+    IRBuilder<> Builder(FirstInst);
+    if (isa<PHINode>(FirstInst)) {
+      Builder.SetInsertionPoint(Entry.getFirstNonPHI());
+    }
+
       // Create a global string for the function's own name.
       Value *funcName = Builder.CreateGlobalStringPtr(F.getName());
       // Insert a call to print_func_name with the function name.
