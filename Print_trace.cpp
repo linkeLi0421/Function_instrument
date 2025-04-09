@@ -14,32 +14,35 @@ struct Print_trace : PassInfoMixin<Print_trace> {
     if (F.isDeclaration())
       return PreservedAnalyses::all();
 
-      Module *M = F.getParent();
-      LLVMContext &Ctx = F.getContext();
-  
-      // Look up or create the external runtime function 'print_func_name'
-      // which should have the signature: void print_func_name(const char*)
-      Function *printFunc = M->getFunction("__print_func_name");
-      if (!printFunc) {
-        FunctionType *FT = FunctionType::get(
-          Type::getVoidTy(Ctx),
-          { Type::getInt8Ty(Ctx)->getPointerTo() },
-          false);
-        printFunc = Function::Create(FT, Function::ExternalLinkage, "__print_func_name", M);
-      }
+    Module *M = F.getParent();
+    LLVMContext &Ctx = F.getContext();
+
+    // Look up or create the external runtime function 'print_func_name'
+    // which should have the signature: void print_func_name(const char*)
+    Function *printFunc = M->getFunction("__print_func_name");
+    if (!printFunc) {
+      FunctionType *FT = FunctionType::get(
+        Type::getVoidTy(Ctx),
+        { Type::getInt8Ty(Ctx)->getPointerTo() },
+        false);
+      printFunc = Function::Create(FT, Function::ExternalLinkage, "__print_func_name", M);
+    }
   
     // Insert before first non-PHI instruction
     BasicBlock &Entry = F.getEntryBlock();
     Instruction *FirstInst = &Entry.front();
     IRBuilder<> Builder(FirstInst);
+    
     if (isa<PHINode>(FirstInst)) {
-      Builder.SetInsertionPoint(Entry.getFirstNonPHI());
+      Builder.SetInsertPoint(Entry.getFirstNonPHI());
+    } else {
+      Builder.SetInsertPoint(&*Entry.begin());
     }
 
-      // Create a global string for the function's own name.
-      Value *funcName = Builder.CreateGlobalStringPtr(F.getName());
-      // Insert a call to print_func_name with the function name.
-      Builder.CreateCall(printFunc, {funcName});
+    // Create a global string for the function's own name.
+    Value *funcName = Builder.CreateGlobalStringPtr(F.getName());
+    // Insert a call to print_func_name with the function name.
+    Builder.CreateCall(printFunc, {funcName});
   
       // Since we modified the IR, we do not preserve any analyses.
       return PreservedAnalyses::none();
