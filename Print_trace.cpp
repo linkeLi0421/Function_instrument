@@ -58,36 +58,13 @@ struct Print_trace : PassInfoMixin<Print_trace> {
 //-----------------------------------------------------------------------------
 llvm::PassPluginLibraryInfo Print_tracePluginInfo() {
   return {LLVM_PLUGIN_API_VERSION, "Print_trace", LLVM_VERSION_STRING,
-          [](PassBuilder &PB) {
-            // Register for opt -passes=Print_trace
-            PB.registerPipelineParsingCallback(
-                [](StringRef Name, FunctionPassManager &FPM,
-                   ArrayRef<PassBuilder::PipelineElement>) {
-                  if (Name == "Print_trace") {
-                    FPM.addPass(Print_trace());
-                    return true;
-                  }
-                  return false;
-                });
-                
-            // Register for clang frontend action - early in the optimization pipeline
-            PB.registerOptimizerEarlyEPCallback(
-                [](ModulePassManager &MPM, OptimizationLevel OL) {
-                  MPM.addPass(createModuleToFunctionPassAdaptor(Print_trace()));
-                });
-                
-            // Additionally, register for scalar optimizer (middle of pipeline)
-            PB.registerScalarOptimizerLateEPCallback(
-                [](FunctionPassManager &FPM, OptimizationLevel OL) {
-                  FPM.addPass(Print_trace());
-                });
-                
-            // Register as peephole optimization (late in pipeline)
-            PB.registerPeepholeEPCallback(
-                [](FunctionPassManager &FPM, OptimizationLevel OL) {
-                  FPM.addPass(Print_trace());
-                });
-          }};
+    [](PassBuilder &PB) {
+      // Register once at the end of the optimization pipeline
+      PB.registerOptimizerLastEPCallback(
+        [](ModulePassManager &MPM, OptimizationLevel OL) {
+          MPM.addPass(createModuleToFunctionPassAdaptor(Print_trace()));
+        });
+    }};
 }
 
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
