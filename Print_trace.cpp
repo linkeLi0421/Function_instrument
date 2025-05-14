@@ -61,32 +61,30 @@ struct Print_trace : PassInfoMixin<Print_trace> {
       Builder.SetInsertPoint(&*Entry.begin());
     }
 
-    // Check if the file being compiled is C++ or C
-    StringRef FilePath = F.getParent()->getSourceFileName();
-    bool isCppFile = false;
-    if (FilePath.ends_with(".cpp") || FilePath.ends_with(".cc") || 
-      FilePath.ends_with(".cxx") || FilePath.ends_with(".C")) {
-      isCppFile = true;
-    } else if (FilePath.ends_with(".c")) {
-      isCppFile = false;
-    } else {
-      // If we can't determine by extension, check for C++ name mangling
-      isCppFile = F.getName().starts_with("_Z");
+    // Get function line number from debug info if available
+    unsigned lineNumber = 0;
+    unsigned columnNumber = 0;
+    StringRef filename = "";
+    if (DISubprogram *SP = F.getSubprogram()) {
+      lineNumber = SP->getLine();
+      if (const DILocation *Loc = SP->getScopeLine() > 0 ? 
+          DILocation::get(Ctx, SP->getScopeLine(), 1, SP->getScope()) : nullptr) {
+        columnNumber = Loc->getColumn();
+      }
+      filename = SP->getFilename();
     }
 
-    // Create a global string for the function's own name.
+    // Prepare the parameters: function name and line number
     Value *funcName = Builder.CreateGlobalStringPtr(F.getName());
+    Value *filenameVal = Builder.CreateGlobalStringPtr(filename);
+    Value *lineVal = Builder.getInt32(lineNumber);
+    Value *colVal = Builder.getInt32(columnNumber);
     // Insert a call to print_func_name with the function name.
-    // Call print_func_name with the function name and demangle=0 (for raw function name)
-    Builder.CreateCall(printFunc, {funcName, Builder.getInt32(0)});
-
-    if (isCppFile) {
-      Value *funcName = Builder.CreateGlobalStringPtr(buildPrettySignature(F));
-      Builder.CreateCall(printFunc, {funcName, Builder.getInt32(1)});
-    }
+    Value* args[] = {funcName, filenameVal, lineVal, colVal};
+    Builder.CreateCall(printFunc, args);
   
-      // Since we modified the IR, we do not preserve any analyses.
-      return PreservedAnalyses::none();
+    // Since we modified the IR, we do not preserve any analyses.
+    return PreservedAnalyses::none();
   }
   
     // Ensure the pass runs even for functions marked with optnone.
